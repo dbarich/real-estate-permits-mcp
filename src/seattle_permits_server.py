@@ -17,10 +17,23 @@ Usage:
 
 from mcp.server.fastmcp import FastMCP
 import httpx
+import os
+import re
+import sys
 from datetime import datetime, timedelta
 
 # Initialize MCP server
 mcp = FastMCP("seattle-permits")
+
+# Debug logging (stderr only — never stdout, which is the MCP transport).
+# Enable with SEATTLE_PERMITS_DEBUG=1 to see the actual WHERE clauses
+# being sent to the King County ArcGIS API.
+DEBUG = os.environ.get("SEATTLE_PERMITS_DEBUG", "").lower() in ("1", "true", "yes", "on")
+
+
+def _debug(msg: str) -> None:
+    if DEBUG:
+        print(f"[seattle-permits] {msg}", file=sys.stderr)
 
 # =============================================================================
 # CONFIGURATION
@@ -228,20 +241,30 @@ async def get_permit_details(permit_number: str) -> str:
 # KING COUNTY ASSESSOR QUERIES (Corrected)
 # =============================================================================
 
-async def query_kc_layer(layer: int, where_clause: str) -> dict:
-    """Query a King County PropertyInfo MapServer layer."""
+async def query_kc_layer(layer: int, where_clause: str, out_fields: str = "*") -> dict:
+    """Query a King County PropertyInfo MapServer layer.
+
+    Logs the WHERE clause and feature count to stderr when
+    SEATTLE_PERMITS_DEBUG is set.
+    """
     url = f"{KC_PROPERTY_INFO}/{layer}/query"
     params = {
         "where": where_clause,
-        "outFields": "*",
+        "outFields": out_fields,
         "returnGeometry": "false",
-        "f": "json"
+        "f": "json",
     }
-    
+    _debug(f"layer {layer}  WHERE: {where_clause}")
+
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.get(url, params=params)
         response.raise_for_status()
-        return response.json()
+        data = response.json()
+        if "error" in data:
+            _debug(f"  -> API error: {data['error']}")
+        else:
+            _debug(f"  -> {len(data.get('features', []))} features")
+        return data
 
 
 def format_sale_date(timestamp_ms: int) -> str:
@@ -254,11 +277,155 @@ def format_sale_date(timestamp_ms: int) -> str:
         return "N/A"
 
 
+# =============================================================================
+# ADDRESS PARSING
+# =============================================================================
+# KC stores addresses uppercase with abbreviated suffixes and no punctuation,
+# e.g. "2412 S DEARBORN ST" or "12821 12TH AVE S". Seattle convention puts the
+# directional BEFORE the street name for E-W streets and AFTER for N-S
+# avenues, so a robust LIKE query tries both orderings.
+
+_SUFFIX_MAP = {
+    "STREET": "ST", "ST": "ST",
+    "AVENUE": "AVE", "AVE": "AVE", "AV": "AVE",
+    "BOULEVARD": "BLVD", "BLVD": "BLVD",
+    "DRIVE": "DR", "DR": "DR",
+    "ROAD": "RD", "RD": "RD",
+    "PLACE": "PL", "PL": "PL",
+    "COURT": "CT", "CT": "CT",
+    "LANE": "LN", "LN": "LN",
+    "WAY": "WAY",
+    "PARKWAY": "PKWY", "PKWY": "PKWY",
+    "TERRACE": "TER", "TER": "TER",
+    "CIRCLE": "CIR", "CIR": "CIR",
+    "HIGHWAY": "HWY", "HWY": "HWY",
+    "TRAIL": "TRL", "TRL": "TRL",
+}
+_DIRECTIONALS = {"N", "S", "E", "W", "NE", "NW", "SE", "SW"}
+
+
+def _normalize_address(raw: str) -> dict:
+    """Parse a free-form address into normalized parts.
+
+    Returns dict with keys: house, leading_dir, trailing_dir, street, suffix.
+    Empty dict if the input is unparseable (no tokens).
+    """
+    if not raw:
+        return {}
+    s = re.sub(r"[.,]", " ", raw.upper())
+    s = re.sub(r"\s+", " ", s).strip()
+    tokens = s.split()
+    if not tokens:
+        return {}
+
+    house = ""
+    if tokens[0][0].isdigit():
+        house = tokens[0]
+        tokens = tokens[1:]
+
+    leading_dir = ""
+    if tokens and tokens[0] in _DIRECTIONALS:
+        leading_dir = tokens[0]
+        tokens = tokens[1:]
+
+    trailing_dir = ""
+    if tokens and tokens[-1] in _DIRECTIONALS:
+        trailing_dir = tokens[-1]
+        tokens = tokens[:-1]
+
+    suffix = ""
+    if tokens and tokens[-1] in _SUFFIX_MAP:
+        suffix = _SUFFIX_MAP[tokens[-1]]
+        tokens = tokens[:-1]
+
+    return {
+        "house": house,
+        "leading_dir": leading_dir,
+        "trailing_dir": trailing_dir,
+        "street": " ".join(tokens),
+        "suffix": suffix,
+    }
+
+
+def _address_variants(raw: str) -> list:
+    """Generate ordered list of LIKE patterns to try, most specific first."""
+    p = _normalize_address(raw)
+    if not p or not p.get("street"):
+        return []
+    house = p["house"]
+    street = p["street"]
+    suffix = p["suffix"]
+    direction = p["leading_dir"] or p["trailing_dir"]
+
+    candidates = []
+    # Most specific: full address as parsed (leading-dir, e.g. "2412 S DEARBORN ST")
+    if direction and suffix:
+        candidates.append(" ".join(filter(None, [house, direction, street, suffix])))
+        # Trailing-dir style, e.g. "12821 12TH AVE S"
+        candidates.append(" ".join(filter(None, [house, street, suffix, direction])))
+    if direction:
+        candidates.append(" ".join(filter(None, [house, direction, street])))
+        candidates.append(" ".join(filter(None, [house, street, direction])))
+    if suffix:
+        candidates.append(" ".join(filter(None, [house, street, suffix])))
+    candidates.append(" ".join(filter(None, [house, street])))
+
+    seen, out = set(), []
+    for v in candidates:
+        if v and v not in seen:
+            seen.add(v)
+            out.append(v)
+    return out
+
+
+def _street_only(raw: str) -> str:
+    """Return 'DIR STREET SUFFIX' (no house number) for nearby-parcels queries."""
+    p = _normalize_address(raw)
+    if not p or not p.get("street"):
+        return ""
+    if p["leading_dir"]:
+        parts = [p["leading_dir"], p["street"], p["suffix"]]
+    else:
+        parts = [p["street"], p["suffix"], p["trailing_dir"]]
+    return " ".join([x for x in parts if x]).strip()
+
+
+# Field sets for Layer 2 (Parcels) — full ADDR_FULL, lot size, appraised values
+PARCEL_FIELDS = (
+    "PIN,ADDR_FULL,ADDR_HN,KCA_ZONING,KCA_ACRES,LOTSQFT,"
+    "APPRLNDVAL,APPR_IMPR,PREUSE_DESC,PROPTYPE,ZIP5,POSTALCTYNAME"
+)
+
+
+async def _latest_sales_by_pin(features: list) -> dict:
+    """For a batch of parcel features, fetch the latest Layer 3 sale per PIN."""
+    pins = [f.get("attributes", {}).get("PIN") for f in features]
+    pins = [p for p in pins if p][:50]  # keep WHERE clause length reasonable
+    if not pins:
+        return {}
+    quoted = ",".join(f"'{p}'" for p in pins)
+    try:
+        data = await query_kc_layer(3, f"PIN IN ({quoted})", "PIN,SalePrice,SaleDate")
+    except Exception as e:
+        _debug(f"sales enrichment failed: {e}")
+        return {}
+    latest = {}
+    for f in data.get("features", []):
+        a = f.get("attributes", {})
+        pin = a.get("PIN")
+        if not pin:
+            continue
+        cur = latest.get(pin)
+        if cur is None or (a.get("SaleDate") or 0) > (cur.get("SaleDate") or 0):
+            latest[pin] = a
+    return latest
+
+
 @mcp.tool()
 async def get_parcel_by_address(address: str) -> str:
     """
     Look up King County parcel information by address.
-    Returns PIN, assessed value, lot size, and other property details.
+    Returns PIN, zoning, lot size, appraised value, and last sale (if any).
 
     Args:
         address: Property address (e.g., "2412 S Dearborn St")
@@ -266,49 +433,112 @@ async def get_parcel_by_address(address: str) -> str:
     Returns:
         Parcel information from King County Assessor
     """
-    # Search Layer 3 (sales) which has address field
-    # Use LIKE for flexible matching
-    search_addr = address.upper().replace("'", "''")
-    where = f"address LIKE '%{search_addr}%'"
-    
+    # Input validation
+    if not address or not address.strip():
+        return "Error: address is required"
+    if len(address.strip()) < 4:
+        return f"Error: address '{address}' is too short to look up"
+    if not any(c.isdigit() for c in address):
+        return f"Error: address '{address}' has no house number; include the street number"
+
+    variants = _address_variants(address)
+    if not variants:
+        return f"Error: could not parse a street name from '{address}'"
+    _debug(f"get_parcel_by_address('{address}') -> variants: {variants}")
+
+    tried = []
     try:
-        data = await query_kc_layer(3, where)
-        features = data.get("features", [])
-        
-        if not features:
-            # Try partial match on street name
-            parts = address.upper().split()
-            for part in parts:
-                if len(part) > 3 and not part.isdigit():
-                    where = f"address LIKE '%{part}%'"
-                    data = await query_kc_layer(3, where)
-                    features = data.get("features", [])
-                    if features:
-                        break
-        
-        if not features:
-            return f"No parcel found for address: {address}"
-        
-        output = [f"Found {len(features)} parcel(s) matching '{address}':\n"]
-        
-        for f in features[:5]:
-            a = f.get("attributes", {})
-            output.append(f"Address: {a.get('address', 'N/A').strip()}")
-            output.append(f"PIN: {a.get('PIN', 'N/A')}")
-            output.append(f"Sale Price: ${a.get('SalePrice', 0):,}")
-            output.append(f"Sale Date: {format_sale_date(a.get('SaleDate'))}")
-            output.append(f"Property Type: {a.get('Property_Type', 'N/A')}")
-            output.append(f"Principal Use: {a.get('Principal_Use', 'N/A')}")
-            output.append(f"Property Class: {a.get('Property_Class', 'N/A').strip()}")
-            output.append(f"Lot Area: {a.get('shape.STArea()', 0):,.0f} sq ft")
-            output.append("---")
-        
-        return "\n".join(output)
-    
+        # Layer 2 (Parcels) is the authoritative parcel layer with ADDR_FULL.
+        # It covers EVERY parcel, not just those sold in the last ~3 years
+        # (Layer 3). This replaces the old Layer 3 LIKE search.
+        for variant in variants:
+            esc = variant.replace("'", "''")
+            where = f"ADDR_FULL LIKE '%{esc}%'"
+            tried.append(variant)
+            data = await query_kc_layer(2, where, PARCEL_FIELDS)
+            features = data.get("features", [])
+            if features:
+                sales = await _latest_sales_by_pin(features[:5])
+                return _format_parcel_matches(address, variant, features, sales)
+
+        # Defensive fallback: Layer 3 (sales) — catches the rare case where
+        # an address was reformatted between the parcel and sales tables.
+        for variant in variants:
+            esc = variant.replace("'", "''")
+            where = f"address LIKE '%{esc}%'"
+            data = await query_kc_layer(3, where)
+            features = data.get("features", [])
+            if features:
+                return _format_sales_only_matches(address, variant, features)
+
+        return (
+            f"No parcel found for '{address}'. "
+            f"Tried these address variants against Layer 2 (Parcels) and "
+            f"Layer 3 (Sales): {', '.join(tried)}."
+        )
+
     except httpx.HTTPStatusError as e:
         return f"HTTP error querying King County: {e.response.status_code}"
     except Exception as e:
         return f"Error querying King County parcel data: {str(e)}"
+
+
+def _format_parcel_matches(query: str, variant: str, features: list, sales: dict) -> str:
+    """Render Layer 2 parcel matches with optional sales enrichment."""
+    output = [
+        f"Found {len(features)} parcel(s) matching '{query}' "
+        f"(via variant '{variant}'):\n"
+    ]
+    for f in features[:5]:
+        a = f.get("attributes", {})
+        pin = a.get("PIN") or "N/A"
+        sale = sales.get(pin, {})
+        addr = (a.get("ADDR_FULL") or "").strip() or "N/A"
+        zoning = a.get("KCA_ZONING") or "N/A"
+        use = (a.get("PREUSE_DESC") or "").strip() or "N/A"
+        lot = a.get("LOTSQFT") or 0
+        land = a.get("APPRLNDVAL") or 0
+        impr = a.get("APPR_IMPR") or 0
+        zip5 = a.get("ZIP5") or ""
+
+        output.append(f"Address: {addr}" + (f"  ({zip5})" if zip5 else ""))
+        output.append(f"PIN: {pin}")
+        output.append(f"Zoning: {zoning}")
+        output.append(f"Present Use: {use}")
+        output.append(f"Lot Area: {lot:,} sq ft")
+        output.append(
+            f"Appraised: Land ${land:,.0f} + Improvement ${impr:,.0f} "
+            f"= Total ${land + impr:,.0f}"
+        )
+        if sale:
+            output.append(
+                f"Last Sale: ${sale.get('SalePrice', 0):,} on "
+                f"{format_sale_date(sale.get('SaleDate'))}"
+            )
+        else:
+            output.append("Last Sale: none in past ~3 years")
+        output.append("---")
+    if len(features) > 5:
+        output.append(f"... and {len(features) - 5} more matches")
+    return "\n".join(output)
+
+
+def _format_sales_only_matches(query: str, variant: str, features: list) -> str:
+    """Fallback formatter when only Layer 3 (sales) returned hits."""
+    output = [
+        f"Found {len(features)} sales match(es) for '{query}' "
+        f"(via variant '{variant}') — parcel layer missed, "
+        f"using sales layer:\n"
+    ]
+    for f in features[:5]:
+        a = f.get("attributes", {})
+        output.append(f"Address: {(a.get('address') or '').strip()}")
+        output.append(f"PIN: {a.get('PIN', 'N/A')}")
+        output.append(f"Sale Price: ${a.get('SalePrice', 0):,}")
+        output.append(f"Sale Date: {format_sale_date(a.get('SaleDate'))}")
+        output.append(f"Property Class: {(a.get('Property_Class') or '').strip()}")
+        output.append("---")
+    return "\n".join(output)
 
 
 @mcp.tool()
@@ -371,56 +601,68 @@ async def get_parcel_by_pin(pin: str) -> str:
 @mcp.tool()
 async def get_nearby_parcels(address: str, property_type: str = "") -> str:
     """
-    Find parcels near a given address for comparable analysis.
-    Note: This is a simplified version - for production, would use spatial query.
+    Find parcels on the same street as the given address for comparable
+    analysis. Uses Layer 2 (Parcels) so results include every property on the
+    street, not just those sold in the last ~3 years.
 
     Args:
         address: Starting address (e.g., "2412 S Dearborn St")
-        property_type: Optional filter (e.g., "Residential", "Commercial")
+        property_type: Optional substring match on PREUSE_DESC (e.g., "SINGLE",
+            "DUPLEX", "VACANT")
 
     Returns:
-        List of nearby parcels with valuations
+        List of nearby parcels with valuations, sorted by total appraised value
     """
-    # Extract street name from address for searching
-    parts = address.upper().split()
-    street_name = None
-    for part in parts:
-        if part not in ["N", "S", "E", "W", "NE", "NW", "SE", "SW", "ST", "AVE", "BLVD", "DR", "RD", "WAY", "PL", "CT"] and not part.isdigit():
-            street_name = part
-            break
-    
-    if not street_name:
-        return "Could not extract street name from address"
-    
-    where = f"address LIKE '%{street_name}%'"
+    if not address or not address.strip():
+        return "Error: address is required"
+
+    street_query = _street_only(address)
+    if not street_query:
+        return f"Error: could not extract a street name from '{address}'"
+    _debug(f"get_nearby_parcels('{address}') -> street_query: '{street_query}'")
+
+    esc = street_query.replace("'", "''")
+    where = f"ADDR_FULL LIKE '%{esc}%'"
     if property_type:
-        where += f" AND Principal_Use LIKE '%{property_type.upper()}%'"
-    
+        where += f" AND PREUSE_DESC LIKE '%{property_type.upper()}%'"
+
     try:
-        data = await query_kc_layer(3, where)
+        data = await query_kc_layer(2, where, PARCEL_FIELDS)
         features = data.get("features", [])
-        
         if not features:
-            return f"No nearby parcels found for: {address}"
-        
-        output = [f"Found {len(features)} parcels on '{street_name}':\n"]
-        
-        # Sort by sale price descending for relevance
-        sorted_features = sorted(features, key=lambda x: x.get("attributes", {}).get("SalePrice", 0), reverse=True)
-        
-        for f in sorted_features[:15]:
+            return f"No parcels found on '{street_query}' for query '{address}'"
+
+        def total_value(f):
             a = f.get("attributes", {})
-            addr = a.get('address', 'N/A').strip()
-            pin = a.get('PIN', 'N/A')
-            price = a.get('SalePrice', 0)
-            date = format_sale_date(a.get('SaleDate'))
-            lot = a.get('shape.STArea()', 0)
-            
-            output.append(f"- {addr}")
-            output.append(f"  PIN: {pin} | Sale: ${price:,} ({date}) | Lot: {lot:,.0f} sq ft")
-        
+            return (a.get("APPRLNDVAL") or 0) + (a.get("APPR_IMPR") or 0)
+
+        features.sort(key=total_value, reverse=True)
+        top = features[:15]
+        sales = await _latest_sales_by_pin(top)
+
+        output = [f"Found {len(features)} parcels on '{street_query}':\n"]
+        for f in top:
+            a = f.get("attributes", {})
+            pin = a.get("PIN") or "N/A"
+            addr = (a.get("ADDR_FULL") or "").strip()
+            zoning = a.get("KCA_ZONING") or "N/A"
+            lot = a.get("LOTSQFT") or 0
+            tot = total_value(f)
+            line = (
+                f"- {addr} | PIN {pin} | {zoning} | "
+                f"Lot {lot:,} sf | Appraised ${tot:,.0f}"
+            )
+            sale = sales.get(pin)
+            if sale:
+                line += (
+                    f" | Sold ${sale.get('SalePrice', 0):,} "
+                    f"({format_sale_date(sale.get('SaleDate'))})"
+                )
+            output.append(line)
+        if len(features) > 15:
+            output.append(f"\n... and {len(features) - 15} more")
         return "\n".join(output)
-    
+
     except Exception as e:
         return f"Error finding nearby parcels: {str(e)}"
 
@@ -442,26 +684,31 @@ async def get_development_comparables(address: str, days_back: int = 365) -> str
     Returns:
         Combined permit and property analysis
     """
+    if not address or not address.strip():
+        return "Error: address is required"
+
     output = [f"=== Development Comparables for {address} ===\n"]
-    
-    # Extract street name for permit search
-    parts = address.upper().split()
-    street_name = None
-    for part in parts:
-        if part not in ["N", "S", "E", "W", "NE", "NW", "SE", "SW", "ST", "AVE", "BLVD", "DR", "RD", "WAY", "PL", "CT"] and not part.isdigit():
-            street_name = part
-            break
-    
+
+    # Use the same address parser as the parcel functions; pass the bare
+    # street name to the permit search (Socrata matches it as a substring of
+    # originaladdress1).
+    parsed = _normalize_address(address)
+    street_name = parsed.get("street") if parsed else ""
+
     if street_name:
         output.append("--- Recent Permit Activity ---")
         permit_results = await search_permits(street_name, days_back)
         output.append(permit_results)
         output.append("")
-    
-    output.append("--- Recent Property Sales ---")
+    else:
+        output.append("--- Recent Permit Activity ---")
+        output.append(f"(skipped — could not parse street name from '{address}')")
+        output.append("")
+
+    output.append("--- Nearby Parcels & Recent Sales ---")
     parcel_results = await get_nearby_parcels(address)
     output.append(parcel_results)
-    
+
     return "\n".join(output)
 
 

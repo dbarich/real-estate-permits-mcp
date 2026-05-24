@@ -2,48 +2,65 @@
 
 ## Current Position
 
-**Stage: Prototype (working, single-user, validated for 3 use cases)**
+**Stage: Prototype → Hardening (Fork A selected May 24, 2026)**
 
-The MCP server runs, serves real data, and has been used to produce actual bank underwriting documents. It has not been tested by anyone other than the author.
+The MCP server runs, serves real data, and has been used to produce actual bank underwriting documents. Repo is live on GitHub (github.com/dbarich/real-estate-permits-mcp), tagged v0.1.0-alpha. Two testers recruited: an engineer reviewing code, and a Zillow data scientist (Bryson) reviewing use case/usability. Devin is shifting primary focus to the FIDIC Tool project; this project is on a minimal-effort path to a testable skeleton.
+
+**Development Fork:** Fork A — MCP Hardening (stay in Claude Desktop, no new UI). Fix bugs, add validation, let testers use it as-is. Tests the hypothesis that the Claude natural language interface is the product, not just a wrapper.
+
+**Alternatives considered and deferred:**
+- Fork B (Streamlit thin client): Revisit if feedback indicates non-technical users need a GUI
+- Fork C (Static showcase + recorded demos): May layer on after Bryson demo is recorded
 
 ---
 
-## Phase 1: Prototype Hardening (Current → 4 weeks)
+## Phase 1: Prototype Hardening (Active — target: June 7, 2026)
 
-**Goal:** Make the existing tool reliable and testable enough to hand to someone else.
+**Goal:** Make the existing tool reliable and testable enough to hand to someone else. Minimal effort — fix what's broken, validate with 2 testers, learn.
 
 **Deliverables:**
 
-- [ ] Input validation and address normalization on all tools
+- [x] README with setup instructions clear enough for a non-author to follow
+- [x] Published to GitHub as public repository
+- [x] Demo script with real query sequences for advisor conversation
+- [x] Fix parcel address lookup bug — Layer 2 (Parcels) as primary, address-format permutations, debug logging (May 24, 2026)
+- [x] Input validation on parcel-lookup tools (empty/malformed address handling) — partial; rest of tools pending
 - [ ] Error type differentiation (no results vs. API error vs. timeout)
-- [ ] Structured JSON output mode (in addition to text) for programmatic consumption
-- [ ] Basic test suite: unit tests for query builders, integration tests against live APIs
-- [ ] README with setup instructions clear enough for a non-author to follow
+- [x] Basic smoke tests for parcel lookup (tests/test_parcel_lookup.py covers 3 target addresses + validation)
 - [ ] Socrata app token support (environment variable, optional)
 
-**Gate:** A second person can install, configure, and successfully run 3 use cases without author assistance.
+**Deferred from original plan (revisit post-feedback):**
+- Structured JSON output mode — only build if testers request it
+- Comprehensive test suite — smoke tests are sufficient for alpha
+
+**Gate:** Both testers can install, configure, and successfully run 3 use cases without author assistance.
 
 **Risk:** Dependency on FastMCP stability — if the MCP SDK changes, the server needs updating.
 
 ---
 
-## Phase 2: Beta (Prototype Gate + 6 weeks)
+## Phase 2: Beta (Target: late June 2026)
 
-**Goal:** Get 3-5 real users running the tool and providing feedback.
+**Goal:** Get 3-5 real users running the tool and providing feedback. Keep scope small — this is a side project.
 
-**Deliverables:**
+**Deliverables (already done):**
 
-- [ ] Published to GitHub as a public repository
+- [x] Published to GitHub as a public repository
+- [x] 2 example skills bundled (dearborn-mcp + dearborn-market-pull)
+- [x] Feedback mechanism (GitHub Issues)
+- [x] Comprehensive README with setup instructions
+
+**Deliverables (remaining):**
+
 - [ ] pip-installable package (or at minimum, clear dependency management)
 - [ ] Claude Desktop MCP config template (copy-paste setup)
-- [ ] 2 example skills bundled (research tool + market pull template)
-- [ ] Feedback mechanism (GitHub Issues, or a simple form)
-- [ ] Basic documentation site or comprehensive README
+- [ ] Decide: Streamlit thin client (Fork B) based on Phase 1 feedback
 
 **User Recruitment Strategy:**
-- Post in Seattle real estate development communities (BiggerPockets Seattle forum, local REIA)
-- Share with Anthropic MCP community (Discord, GitHub discussions)
-- Direct outreach to 2-3 people who fit Persona 1 or Persona 2
+- Engineer tester (recruited, reviewing code)
+- Bryson / Zillow data scientist (recruited, reviewing use case)
+- Post in Anthropic MCP community (Discord, GitHub discussions)
+- 1-2 additional Seattle real estate developers if initial feedback is positive
 
 **Gate:** 3+ users have completed at least 1 use case independently and provided feedback.
 
@@ -116,18 +133,21 @@ The MCP server runs, serves real data, and has been used to produce actual bank 
 
 ---
 
-## Timeline (Estimated)
+## Timeline (Updated May 24, 2026)
 
 ```
-Mar 2026          Apr 2026          May 2026          Jun 2026
-    │                 │                 │                 │
-    ├─ Prototype ─────┤                 │                 │
-    │  Hardening      │                 │                 │
-    │                 ├─── Beta ────────┤                 │
-    │                 │                 │                 │
-    │                 │                 ├── V1 Release ───┤
-    │                 │                 │                 │
-    │                 │                 │                 ├── Expansion ──▶
+May 2026                    Jun 2026                    Jul 2026
+    │                           │                           │
+    ├─ v0.1.0-alpha (DONE) ─┐   │                           │
+    │  GitHub live, 2 testers│   │                           │
+    │                       ├── Hardening (Fork A) ──┐      │
+    │                           │  Bug fix, validation│      │
+    │                           │  Target: Jun 7      │      │
+    │                           │                     ├── Beta
+    │                           │                     │  Target: late Jun
+    │                           │                     │
+    │                           │                     │  V1 / Expansion: TBD
+    │                           │                     │  based on feedback
 ```
 
-These timelines assume part-time effort (this is a side project alongside the Bookstorhaus development). Adjust if circumstances change.
+These timelines assume LOW effort — Devin's primary focus is on the FIDIC Tool project. This project is in maintenance/validation mode: fix what's broken, collect feedback, decide whether to invest further based on tester signal.
