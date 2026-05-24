@@ -32,7 +32,7 @@ There's also a hypothesis (unvalidated) that lenders could use the same tool to 
 ### Install
 
 ```bash
-git clone https://github.com/devinbarich/real-estate-permits-mcp.git
+git clone https://github.com/dbarich/real-estate-permits-mcp.git
 cd real-estate-permits-mcp
 pip install mcp httpx
 ```
