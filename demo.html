@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Real Estate Permits MCP — Demo</title>
+<style>
+  :root {
+    --bg: #fafaf9;
+    --fg: #1c1917;
+    --muted: #78716c;
+    --accent: #b45309;
+    --accent-light: #fef3c7;
+    --border: #e7e5e4;
+    --card-bg: #ffffff;
+    --code-bg: #f5f5f4;
+    --step-done: #16a34a;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    line-height: 1.6;
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+  }
+  h1 { font-size: 1.75rem; font-weight: 700; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.25rem; font-weight: 600; margin-bottom: 0.75rem; color: var(--fg); }
+  h3 { font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; }
+  .subtitle { color: var(--muted); font-size: 1rem; margin-bottom: 2rem; }
+  .badge {
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    background: var(--accent-light);
+    color: var(--accent);
+    margin-left: 0.5rem;
+    vertical-align: middle;
+  }
+
+  /* Navigation */
+  .nav {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+  }
+  .nav button {
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--card-bg);
+    color: var(--muted);
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .nav button:hover { border-color: var(--accent); color: var(--fg); }
+  .nav button.active {
+    background: var(--fg);
+    color: white;
+    border-color: var(--fg);
+  }
+
+  /* Slides */
+  .slide { display: none; }
+  .slide.active { display: block; }
+
+  /* Cards */
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+  }
+  .card p { margin-bottom: 0.75rem; }
+  .card p:last-child { margin-bottom: 0; }
+
+  /* Code blocks */
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem;
+    overflow-x: auto;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    margin: 0.75rem 0;
+  }
+  code {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 0.85rem;
+  }
+  p code, li code {
+    background: var(--code-bg);
+    padding: 0.1rem 0.35rem;
+    border-radius: 3px;
+  }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.75rem 0;
+    font-size: 0.9rem;
+  }
+  th, td {
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+  }
+  th { font-weight: 600; color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; }
+
+  /* Conversation mockup */
+  .convo { margin: 1rem 0; }
+  .msg {
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    margin-bottom: 0.5rem;
+    max-width: 90%;
+    font-size: 0.9rem;
+  }
+  .msg.user {
+    background: var(--fg);
+    color: white;
+    margin-left: auto;
+    border-bottom-right-radius: 2px;
+  }
+  .msg.ai {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-bottom-left-radius: 2px;
+  }
+  .msg .label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.25rem;
+    opacity: 0.6;
+  }
+
+  /* Architecture diagram */
+  .arch-flow {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin: 1rem 0;
+    font-size: 0.85rem;
+  }
+  .arch-box {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--card-bg);
+    text-align: center;
+    font-weight: 500;
+  }
+  .arch-box.highlight { border-color: var(--accent); background: var(--accent-light); }
+  .arch-arrow { color: var(--muted); font-size: 1.2rem; }
+
+  /* Footer nav */
+  .footer-nav {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+  }
+  .footer-nav button {
+    padding: 0.5rem 1.25rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--card-bg);
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.15s;
+  }
+  .footer-nav button:hover { border-color: var(--fg); }
+  .footer-nav button:disabled { opacity: 0.3; cursor: default; }
+
+  ul, ol { margin: 0.5rem 0 0.75rem 1.25rem; }
+  li { margin-bottom: 0.35rem; }
+
+  .highlight-text { color: var(--accent); font-weight: 600; }
+  .section-divider { border: none; border-top: 1px solid var(--border); margin: 1.5rem 0; }
+</style>
+</head>
+<body>
+
+<h1>Real Estate Permits MCP <span class="badge">Prototype</span></h1>
+<p class="subtitle">An AI-native interface to Seattle's building permit and property data</p>
+
+<div class="nav" id="nav"></div>
+
+<!-- SLIDE 0: THE PROBLEM -->
+<div class="slide" data-title="The Problem">
+  <div class="card">
+    <h2>The Problem</h2>
+    <p>Small-scale real estate developers building 2-8 unit projects make critical financial decisions — site acquisition, construction loan applications, feasibility studies — using <strong>fragmented municipal data</strong> scattered across multiple government portals.</p>
+    <p>Today that means manually searching Seattle's SDCI portal for permits, cross-referencing the King County Assessor for property values, and compiling everything into spreadsheets. A single market research pull takes <span class="highlight-text">2-4 hours</span>. Professional consultant reports cost <span class="highlight-text">$2K-$5K</span>.</p>
+    <p>This server turns that into a conversation.</p>
+  </div>
+</div>
+
+<!-- SLIDE 1: HOW IT WORKS -->
+<div class="slide" data-title="How It Works">
+  <div class="card">
+    <h2>Architecture</h2>
+    <p>The MCP server sits between Claude and two public data APIs. You ask questions in natural language. Claude calls the right tools. The server queries the APIs and returns structured results.</p>
+
+    <div class="arch-flow">
+      <div class="arch-box">You</div>
+      <div class="arch-arrow">&rarr;</div>
+      <div class="arch-box">Claude Desktop</div>
+      <div class="arch-arrow">&rarr;</div>
+      <div class="arch-box highlight">MCP Server</div>
+      <div class="arch-arrow">&rarr;</div>
+      <div class="arch-box">Seattle Open Data</div>
+    </div>
+    <div class="arch-flow" style="margin-top: 0;">
+      <div class="arch-box" style="visibility:hidden">You</div>
+      <div class="arch-arrow" style="visibility:hidden">&rarr;</div>
+      <div class="arch-box" style="visibility:hidden">Claude Desktop</div>
+      <div class="arch-arrow">&nbsp;</div>
+      <div class="arch-box highlight" style="visibility:hidden">MCP Server</div>
+      <div class="arch-arrow">&rarr;</div>
+      <div class="arch-box">King County ArcGIS</div>
+    </div>
+
+    <p style="margin-top:1rem;">No API keys required. Both data sources are free and public. The server is ~470 lines of Python.</p>
+  </div>
+</div>
+
+<!-- SLIDE 2: LIVE EXAMPLES -->
+<div class="slide" data-title="Live Examples">
+  <div class="card">
+    <h2>What a Conversation Looks Like</h2>
+    <p>Here are real queries this server handles:</p>
+
+    <h3 style="margin-top:1rem;">Permit Search</h3>
+    <div class="convo">
+      <div class="msg user">
+        <div class="label">You</div>
+        What permits have been issued on Dearborn St in the last year?
+      </div>
+      <div class="msg ai">
+        <div class="label">Claude (via MCP)</div>
+        Found 12 permits on Dearborn St. 3 are new construction (including a 4-unit stacked dwelling at 2412 S Dearborn), 5 are alterations, and 4 are mechanical. The new construction permits range from $380K to $1.2M in estimated value...
+      </div>
+    </div>
+
+    <h3>Property Lookup</h3>
+    <div class="convo">
+      <div class="msg user">
+        <div class="label">You</div>
+        What's the parcel info for 2412 S Dearborn St?
+      </div>
+      <div class="msg ai">
+        <div class="label">Claude (via MCP)</div>
+        PIN: 6362900036. Zoned LR1(M). Lot size: 5,000 sq ft. Present use: Single Family Residence. Appraised value: $249,000 (land) + $189,000 (improvements). Last sale: 2023 at $249,000...
+      </div>
+    </div>
+
+    <h3>Development Comparables</h3>
+    <div class="convo">
+      <div class="msg user">
+        <div class="label">You</div>
+        Show me development comparables near 2412 S Dearborn for my bank loan application.
+      </div>
+      <div class="msg ai">
+        <div class="label">Claude (via MCP)</div>
+        I'll pull both permit activity and property data for the Dearborn corridor. [Calls get_development_comparables] Here's what I found: 4 active construction permits within 2 blocks, nearby parcels assessed at $245K-$680K, and 3 recent sales showing an upward trend...
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 3: THE 8 TOOLS -->
+<div class="slide" data-title="Tools">
+  <div class="card">
+    <h2>Available Tools</h2>
+    <p>The server exposes 8 tools via the Model Context Protocol. Claude chooses which ones to call based on your question.</p>
+
+    <table>
+      <thead>
+        <tr><th>Tool</th><th>What It Does</th><th>Data Source</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>search_permits</code></td><td>Search permits by street name</td><td>Seattle Socrata</td></tr>
+        <tr><td><code>search_permits_by_zip</code></td><td>Search by ZIP, optionally filter by type</td><td>Seattle Socrata</td></tr>
+        <tr><td><code>get_multifamily_permits</code></td><td>Multi-unit permits citywide</td><td>Seattle Socrata</td></tr>
+        <tr><td><code>get_permit_details</code></td><td>Specific permit by number</td><td>Seattle Socrata</td></tr>
+        <tr><td><code>get_parcel_by_address</code></td><td>Property info by address</td><td>King County ArcGIS</td></tr>
+        <tr><td><code>get_parcel_by_pin</code></td><td>Property info by parcel ID</td><td>King County ArcGIS</td></tr>
+        <tr><td><code>get_nearby_parcels</code></td><td>Comparable parcels nearby</td><td>King County ArcGIS</td></tr>
+        <tr><td><code>get_development_comparables</code></td><td>Combined permit + parcel analysis</td><td>Both</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- SLIDE 4: REAL USE CASE -->
+<div class="slide" data-title="Real Use Case">
+  <div class="card">
+    <h2>Validated Use Case: Bank Underwriting</h2>
+    <p>This server was built to support a real construction loan application for a 4-level stacked dwelling unit project in Seattle's Judkins Park neighborhood.</p>
+
+    <h3 style="margin-top:1rem;">The workflow:</h3>
+    <ol>
+      <li>Developer asks Claude for market context around their target site</li>
+      <li>MCP server pulls permit activity, comparable properties, and recent sales</li>
+      <li>Claude synthesizes the data into a narrative with supporting numbers</li>
+      <li>Output feeds directly into a bank underwriting document</li>
+    </ol>
+
+    <hr class="section-divider">
+
+    <h3>What previously took 2-4 hours now takes about 5 minutes.</h3>
+    <p>The data comes from the same public sources a consultant would use. The difference is that the queries are repeatable, composable, and conversational — you can ask follow-up questions, adjust parameters, and drill down without starting over.</p>
+  </div>
+</div>
+
+<!-- SLIDE 5: SETUP -->
+<div class="slide" data-title="Setup">
+  <div class="card">
+    <h2>Try It Yourself</h2>
+
+    <h3>Prerequisites</h3>
+    <p>Python 3.10+ and Claude Desktop (or any MCP-compatible host).</p>
+
+    <h3 style="margin-top:1rem;">Install (30 seconds)</h3>
+<pre>pip install mcp httpx</pre>
+
+    <h3 style="margin-top:1rem;">Configure Claude Desktop</h3>
+    <p>Add this to your <code>claude_desktop_config.json</code>:</p>
+<pre>{
+  "mcpServers": {
+    "seattle-permits": {
+      "command": "python",
+      "args": ["/path/to/src/seattle_permits_server.py"]
+    }
+  }
+}</pre>
+    <p>Restart Claude Desktop. The 8 tools appear automatically.</p>
+
+    <h3 style="margin-top:1rem;">First query to try</h3>
+<pre>"What multifamily permits have been filed in 98144 in the last 6 months?"</pre>
+    <p>No API keys. No database. No server to maintain. Just a Python script and a config entry.</p>
+  </div>
+</div>
+
+<!-- SLIDE 6: WHAT'S NEXT -->
+<div class="slide" data-title="Roadmap">
+  <div class="card">
+    <h2>Where This Is Going</h2>
+
+    <table>
+      <thead>
+        <tr><th>Phase</th><th>Focus</th><th>Timeline</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Prototype (current)</td><td>Working, single-user, validated</td><td>Now</td></tr>
+        <tr><td>Hardening</td><td>Input validation, tests, error handling, JSON output mode</td><td>March 2026</td></tr>
+        <tr><td>Beta</td><td>3-5 users, pip-installable, GitHub publish</td><td>April 2026</td></tr>
+        <tr><td>V1 Release</td><td>MCP registry, stable API, documentation site</td><td>May 2026</td></tr>
+      </tbody>
+    </table>
+
+    <hr class="section-divider">
+
+    <h3>Future directions under consideration</h3>
+    <ul>
+      <li><strong>Deeper Seattle:</strong> Land use permits, zoning interpretation, historical trends</li>
+      <li><strong>Multi-city:</strong> Portland, Austin, Denver (each city's open data is different)</li>
+      <li><strong>Non-MCP interfaces:</strong> REST API, web dashboard, email alerts</li>
+    </ul>
+
+    <p style="margin-top:1rem;">Interested in beta access or have a city you'd like supported? Let's talk.</p>
+  </div>
+</div>
+
+<div class="footer-nav">
+  <button id="prevBtn" onclick="navigate(-1)">&larr; Previous</button>
+  <span id="pageCount" style="color:var(--muted);font-size:0.85rem;align-self:center;"></span>
+  <button id="nextBtn" onclick="navigate(1)">Next &rarr;</button>
+</div>
+
+<script>
+const slides = document.querySelectorAll('.slide');
+const nav = document.getElementById('nav');
+let current = 0;
+
+// Build nav buttons
+slides.forEach((slide, i) => {
+  const btn = document.createElement('button');
+  btn.textContent = slide.dataset.title;
+  btn.onclick = () => goTo(i);
+  nav.appendChild(btn);
+});
+
+function goTo(i) {
+  slides[current].classList.remove('active');
+  nav.children[current].classList.remove('active');
+  current = i;
+  slides[current].classList.add('active');
+  nav.children[current].classList.add('active');
+  document.getElementById('prevBtn').disabled = current === 0;
+  document.getElementById('nextBtn').disabled = current === slides.length - 1;
+  document.getElementById('pageCount').textContent = `${current + 1} / ${slides.length}`;
+}
+
+function navigate(dir) { goTo(current + dir); }
+
+// Keyboard nav
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' && current < slides.length - 1) navigate(1);
+  if (e.key === 'ArrowLeft' && current > 0) navigate(-1);
+});
+
+goTo(0);
+</script>
+</body>
+</html>
