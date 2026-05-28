@@ -30,10 +30,30 @@ mcp = FastMCP("seattle-permits")
 # being sent to the King County ArcGIS API.
 DEBUG = os.environ.get("SEATTLE_PERMITS_DEBUG", "").lower() in ("1", "true", "yes", "on")
 
+# Optional Socrata app token — unauthenticated requests are throttled by Seattle's API.
+SOCRATA_APP_TOKEN = os.environ.get("SOCRATA_APP_TOKEN", "")
+
 
 def _debug(msg: str) -> None:
     if DEBUG:
         print(f"[seattle-permits] {msg}", file=sys.stderr)
+
+
+def _sanitize_soql(value: str) -> str:
+    """Escape single quotes for safe interpolation into SoQL/ArcGIS WHERE clauses.
+
+    Socrata SoQL and ArcGIS WHERE clauses both use single-quote string literals.
+    A bare apostrophe in user input (e.g., "O'Brien") will break the query or —
+    worse — allow clause injection. SQL convention is to double the quote.
+    """
+    return value.replace("'", "''")
+
+
+_DAYS_MAX = 3650  # 10 years
+_LIMIT_MAX = 200
+_ZIP_RE = re.compile(r"^\d{5}$")
+_PIN_RE = re.compile(r"^\d{10}$")
+_PERMIT_NUM_RE = re.compile(r"^[A-Za-z0-9\-]+$")
 
 # =============================================================================
 # CONFIGURATION
@@ -62,7 +82,9 @@ async def query_socrata(dataset_id: str, where_clause: str = "", limit: int = 50
     params = {"$limit": limit, "$order": "issueddate DESC"}
     if where_clause:
         params["$where"] = where_clause
-    
+    if SOCRATA_APP_TOKEN:
+        params["$$app_token"] = SOCRATA_APP_TOKEN
+
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.get(url, params=params)
         response.raise_for_status()
@@ -81,15 +103,29 @@ async def search_permits(street_name: str, days_back: int = 365) -> str:
     Returns:
         Summary of matching permits
     """
+    if not street_name or not street_name.strip():
+        return "Error: street_name is required"
+    street_name = street_name.strip()
+    if len(street_name) < 2:
+        return (
+            f"Error: street_name '{street_name}' is too short — "
+            f"use at least 2 characters"
+        )
+    days_back = max(1, min(days_back, _DAYS_MAX))
+
     cutoff = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
-    where = f"originaladdress1 like '%{street_name.upper()}%' AND issueddate > '{cutoff}'"
-    
+    safe_street = _sanitize_soql(street_name.upper())
+    where = f"originaladdress1 like '%{safe_street}%' AND issueddate > '{cutoff}'"
+
     try:
         results = await query_socrata(SEATTLE_DATASETS["building_permits"], where, limit=100)
-        
+
         if not results:
-            return f"No permits found for '{street_name}' in the last {days_back} days."
-        
+            return (
+                f"No permits found for '{street_name}' in the last {days_back} days. "
+                f"Try a shorter street name or a longer time window."
+            )
+
         output = [f"Found {len(results)} permits near {street_name}:\n"]
         for p in results[:20]:
             addr = p.get("originaladdress1", "Unknown")
@@ -98,14 +134,24 @@ async def search_permits(street_name: str, days_back: int = 365) -> str:
             value = p.get("estprojectcost", "N/A")
             status = p.get("statuscurrent", "Unknown")
             output.append(f"- {addr}: {ptype} ({status}) - ${value} - Issued {issued}")
-        
+
         if len(results) > 20:
             output.append(f"\n... and {len(results) - 20} more permits")
-        
+
         return "\n".join(output)
-    
+
+    except httpx.TimeoutException:
+        return (
+            "Request timed out querying Seattle permit data. "
+            "Try narrowing your search or retry in a few minutes."
+        )
+    except httpx.HTTPStatusError as e:
+        return (
+            f"API error: Seattle data portal returned HTTP {e.response.status_code}. "
+            f"The Seattle data portal may be experiencing issues."
+        )
     except Exception as e:
-        return f"Error searching permits: {str(e)}"
+        return f"Unexpected error querying permits: {str(e)}"
 
 
 @mcp.tool()
@@ -121,18 +167,28 @@ async def search_permits_by_zip(zip_code: str, permit_type: str = "", days_back:
     Returns:
         Summary of matching permits
     """
+    if not zip_code or not _ZIP_RE.match(zip_code.strip()):
+        return "Error: zip_code must be a 5-digit ZIP code (e.g., '98144')"
+    zip_code = zip_code.strip()
+    days_back = max(1, min(days_back, _DAYS_MAX))
+
     cutoff = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
-    where = f"zip like '{zip_code}%' AND issueddate > '{cutoff}'"
-    
+    safe_zip = _sanitize_soql(zip_code)
+    where = f"zip like '{safe_zip}%' AND issueddate > '{cutoff}'"
+
     if permit_type:
-        where += f" AND permittype like '%{permit_type.upper()}%'"
+        safe_type = _sanitize_soql(permit_type.strip().upper())
+        where += f" AND permittype like '%{safe_type}%'"
     
     try:
         results = await query_socrata(SEATTLE_DATASETS["building_permits"], where, limit=100)
-        
+
         if not results:
-            return f"No permits found in ZIP {zip_code} for the last {days_back} days."
-        
+            return (
+                f"No permits found in ZIP {zip_code} for the last {days_back} days. "
+                f"Try removing the permit type filter or extending the time window."
+            )
+
         output = [f"Found {len(results)} permits in ZIP {zip_code}:\n"]
         for p in results[:20]:
             addr = p.get("originaladdress1", "Unknown")
@@ -140,14 +196,24 @@ async def search_permits_by_zip(zip_code: str, permit_type: str = "", days_back:
             issued = p.get("issueddate", "")[:10]
             value = p.get("estprojectcost", "N/A")
             output.append(f"- {addr}: {ptype} - ${value} - Issued {issued}")
-        
+
         if len(results) > 20:
             output.append(f"\n... and {len(results) - 20} more permits")
-        
+
         return "\n".join(output)
-    
+
+    except httpx.TimeoutException:
+        return (
+            "Request timed out querying Seattle permit data. "
+            "Try narrowing your search or retry in a few minutes."
+        )
+    except httpx.HTTPStatusError as e:
+        return (
+            f"API error: Seattle data portal returned HTTP {e.response.status_code}. "
+            f"The Seattle data portal may be experiencing issues."
+        )
     except Exception as e:
-        return f"Error searching permits: {str(e)}"
+        return f"Unexpected error querying permits: {str(e)}"
 
 
 @mcp.tool()
@@ -163,8 +229,11 @@ async def get_multifamily_permits(days_back: int = 365, limit: int = 50) -> str:
     Returns:
         Summary of multifamily permits
     """
+    days_back = max(1, min(days_back, _DAYS_MAX))
+    limit = max(1, min(limit, _LIMIT_MAX))
+
     cutoff = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
-    
+
     # Search for multi-unit keywords in description
     where = f"""issueddate > '{cutoff}' AND (
         description like '%MULTI%' OR 
@@ -177,10 +246,13 @@ async def get_multifamily_permits(days_back: int = 365, limit: int = 50) -> str:
     
     try:
         results = await query_socrata(SEATTLE_DATASETS["building_permits"], where, limit=limit)
-        
+
         if not results:
-            return f"No multifamily permits found in the last {days_back} days."
-        
+            return (
+                f"No multifamily permits found in the last {days_back} days. "
+                f"Try extending the time window."
+            )
+
         output = [f"Found {len(results)} multifamily/multi-unit permits:\n"]
         for p in results[:25]:
             addr = p.get("originaladdress1", "Unknown")
@@ -191,11 +263,21 @@ async def get_multifamily_permits(days_back: int = 365, limit: int = 50) -> str:
             output.append(f"- {addr}: {ptype}")
             output.append(f"  {desc}...")
             output.append(f"  ${value} - Issued {issued}\n")
-        
+
         return "\n".join(output)
-    
+
+    except httpx.TimeoutException:
+        return (
+            "Request timed out querying Seattle permit data. "
+            "Try narrowing your search or retry in a few minutes."
+        )
+    except httpx.HTTPStatusError as e:
+        return (
+            f"API error: Seattle data portal returned HTTP {e.response.status_code}. "
+            f"The Seattle data portal may be experiencing issues."
+        )
     except Exception as e:
-        return f"Error fetching multifamily permits: {str(e)}"
+        return f"Unexpected error fetching multifamily permits: {str(e)}"
 
 
 @mcp.tool()
@@ -209,14 +291,27 @@ async def get_permit_details(permit_number: str) -> str:
     Returns:
         Detailed permit information
     """
-    where = f"permitnum = '{permit_number}'"
-    
+    if not permit_number or not permit_number.strip():
+        return "Error: permit_number is required"
+    permit_number = permit_number.strip()
+    if not _PERMIT_NUM_RE.match(permit_number):
+        return (
+            f"Error: permit_number '{permit_number}' contains invalid characters "
+            f"(allowed: letters, digits, hyphens)"
+        )
+
+    safe_permit = _sanitize_soql(permit_number)
+    where = f"permitnum = '{safe_permit}'"
+
     try:
         results = await query_socrata(SEATTLE_DATASETS["building_permits"], where, limit=1)
-        
+
         if not results:
-            return f"No permit found with number '{permit_number}'."
-        
+            return (
+                f"No permit found with number '{permit_number}'. "
+                f"Double-check the permit number format (e.g., '6808042-CN')."
+            )
+
         p = results[0]
         details = [
             f"Permit: {p.get('permitnum', 'N/A')}",
@@ -232,9 +327,19 @@ async def get_permit_details(permit_number: str) -> str:
             f"Contractor: {p.get('contractorcompanyname', 'N/A')}",
         ]
         return "\n".join(details)
-    
+
+    except httpx.TimeoutException:
+        return (
+            "Request timed out querying Seattle permit data. "
+            "Try narrowing your search or retry in a few minutes."
+        )
+    except httpx.HTTPStatusError as e:
+        return (
+            f"API error: Seattle data portal returned HTTP {e.response.status_code}. "
+            f"The Seattle data portal may be experiencing issues."
+        )
     except Exception as e:
-        return f"Error fetching permit: {str(e)}"
+        return f"Unexpected error fetching permit: {str(e)}"
 
 
 # =============================================================================
@@ -261,9 +366,11 @@ async def query_kc_layer(layer: int, where_clause: str, out_fields: str = "*") -
         response.raise_for_status()
         data = response.json()
         if "error" in data:
-            _debug(f"  -> API error: {data['error']}")
-        else:
-            _debug(f"  -> {len(data.get('features', []))} features")
+            err = data["error"]
+            _debug(f"  -> API error: {err}")
+            msg = err.get("message", str(err)) if isinstance(err, dict) else str(err)
+            raise RuntimeError(f"King County GIS error: {msg}")
+        _debug(f"  -> {len(data.get('features', []))} features")
         return data
 
 
@@ -273,7 +380,7 @@ def format_sale_date(timestamp_ms: int) -> str:
         return "N/A"
     try:
         return datetime.fromtimestamp(timestamp_ms / 1000).strftime("%Y-%m-%d")
-    except:
+    except (ValueError, OSError, OverflowError):
         return "N/A"
 
 
@@ -452,7 +559,7 @@ async def get_parcel_by_address(address: str) -> str:
         # It covers EVERY parcel, not just those sold in the last ~3 years
         # (Layer 3). This replaces the old Layer 3 LIKE search.
         for variant in variants:
-            esc = variant.replace("'", "''")
+            esc = _sanitize_soql(variant)
             where = f"ADDR_FULL LIKE '%{esc}%'"
             tried.append(variant)
             data = await query_kc_layer(2, where, PARCEL_FIELDS)
@@ -464,7 +571,7 @@ async def get_parcel_by_address(address: str) -> str:
         # Defensive fallback: Layer 3 (sales) — catches the rare case where
         # an address was reformatted between the parcel and sales tables.
         for variant in variants:
-            esc = variant.replace("'", "''")
+            esc = _sanitize_soql(variant)
             where = f"address LIKE '%{esc}%'"
             data = await query_kc_layer(3, where)
             features = data.get("features", [])
@@ -474,13 +581,22 @@ async def get_parcel_by_address(address: str) -> str:
         return (
             f"No parcel found for '{address}'. "
             f"Tried these address variants against Layer 2 (Parcels) and "
-            f"Layer 3 (Sales): {', '.join(tried)}."
+            f"Layer 3 (Sales): {', '.join(tried)}. "
+            f"Check spelling, directional (N/S/E/W), and street suffix."
         )
 
+    except httpx.TimeoutException:
+        return (
+            "Request timed out querying King County GIS. "
+            "Try narrowing your search or retry in a few minutes."
+        )
     except httpx.HTTPStatusError as e:
-        return f"HTTP error querying King County: {e.response.status_code}"
+        return (
+            f"API error: King County GIS returned HTTP {e.response.status_code}. "
+            f"The King County GIS may be experiencing issues."
+        )
     except Exception as e:
-        return f"Error querying King County parcel data: {str(e)}"
+        return f"Unexpected error querying King County parcel data: {str(e)}"
 
 
 def _format_parcel_matches(query: str, variant: str, features: list, sales: dict) -> str:
@@ -552,17 +668,30 @@ async def get_parcel_by_pin(pin: str) -> str:
     Returns:
         Detailed parcel information
     """
+    if not pin or not pin.strip():
+        return "Error: PIN is required"
+    pin = pin.strip()
+    if not _PIN_RE.match(pin):
+        return (
+            f"Error: PIN must be a 10-digit number (e.g., '6362900036'). "
+            f"Got: '{pin}'"
+        )
+
+    safe_pin = _sanitize_soql(pin)
     try:
         # Query Layer 0 for zoning/use info
-        parcel_data = await query_kc_layer(0, f"PIN = '{pin}'")
+        parcel_data = await query_kc_layer(0, f"PIN = '{safe_pin}'")
         parcel_features = parcel_data.get("features", [])
-        
+
         # Query Layer 3 for sales info
-        sales_data = await query_kc_layer(3, f"PIN = '{pin}'")
+        sales_data = await query_kc_layer(3, f"PIN = '{safe_pin}'")
         sales_features = sales_data.get("features", [])
         
         if not parcel_features and not sales_features:
-            return f"No parcel found with PIN: {pin}"
+            return (
+                f"No parcel found with PIN: {pin}. "
+                f"Verify the 10-digit Parcel ID Number from the King County Assessor."
+            )
         
         output = [f"=== Parcel Details for PIN {pin} ===\n"]
         
@@ -574,7 +703,7 @@ async def get_parcel_by_pin(pin: str) -> str:
             output.append(f"KC Zoning: {p.get('KCA_ZONING', 'N/A')}")
             output.append(f"Acres: {p.get('KCA_ACRES', 0):.4f}")
             output.append(f"Present Use Code: {p.get('PREUSE_CODE', 'N/A')}")
-            output.append(f"Present Use: {p.get('PREUSE_DESC', 'N/A').strip()}")
+            output.append(f"Present Use: {(p.get('PREUSE_DESC') or 'N/A').strip()}")
             output.append(f"Lot Area: {p.get('Shape.STArea()', 0):,.0f} sq ft")
             output.append("")
         
@@ -582,20 +711,28 @@ async def get_parcel_by_pin(pin: str) -> str:
         if sales_features:
             s = sales_features[0].get("attributes", {})
             output.append("--- Sales Information ---")
-            output.append(f"Address: {s.get('address', 'N/A').strip()}")
+            output.append(f"Address: {(s.get('address') or 'N/A').strip()}")
             output.append(f"Last Sale Price: ${s.get('SalePrice', 0):,}")
             output.append(f"Sale Date: {format_sale_date(s.get('SaleDate'))}")
-            output.append(f"Buyer: {s.get('buyername', 'N/A').strip()}")
-            output.append(f"Seller: {s.get('Sellername', 'N/A').strip()}")
-            output.append(f"Property Class: {s.get('Property_Class', 'N/A').strip()}")
-            output.append(f"Principal Use: {s.get('Principal_Use', 'N/A')}")
+            output.append(f"Buyer: {(s.get('buyername') or 'N/A').strip()}")
+            output.append(f"Seller: {(s.get('Sellername') or 'N/A').strip()}")
+            output.append(f"Property Class: {(s.get('Property_Class') or 'N/A').strip()}")
+            output.append(f"Principal Use: {s.get('Principal_Use') or 'N/A'}")
         
         return "\n".join(output)
     
+    except httpx.TimeoutException:
+        return (
+            "Request timed out querying King County GIS. "
+            "Try narrowing your search or retry in a few minutes."
+        )
     except httpx.HTTPStatusError as e:
-        return f"HTTP error querying King County: {e.response.status_code}"
+        return (
+            f"API error: King County GIS returned HTTP {e.response.status_code}. "
+            f"The King County GIS may be experiencing issues."
+        )
     except Exception as e:
-        return f"Error querying parcel by PIN: {str(e)}"
+        return f"Unexpected error querying parcel by PIN: {str(e)}"
 
 
 @mcp.tool()
@@ -621,16 +758,20 @@ async def get_nearby_parcels(address: str, property_type: str = "") -> str:
         return f"Error: could not extract a street name from '{address}'"
     _debug(f"get_nearby_parcels('{address}') -> street_query: '{street_query}'")
 
-    esc = street_query.replace("'", "''")
+    esc = _sanitize_soql(street_query)
     where = f"ADDR_FULL LIKE '%{esc}%'"
     if property_type:
-        where += f" AND PREUSE_DESC LIKE '%{property_type.upper()}%'"
+        safe_type = _sanitize_soql(property_type.strip().upper())
+        where += f" AND PREUSE_DESC LIKE '%{safe_type}%'"
 
     try:
         data = await query_kc_layer(2, where, PARCEL_FIELDS)
         features = data.get("features", [])
         if not features:
-            return f"No parcels found on '{street_query}' for query '{address}'"
+            return (
+                f"No parcels found on '{street_query}' for query '{address}'. "
+                f"Try a different street name or drop the property type filter."
+            )
 
         def total_value(f):
             a = f.get("attributes", {})
@@ -663,8 +804,18 @@ async def get_nearby_parcels(address: str, property_type: str = "") -> str:
             output.append(f"\n... and {len(features) - 15} more")
         return "\n".join(output)
 
+    except httpx.TimeoutException:
+        return (
+            "Request timed out querying King County GIS. "
+            "Try narrowing your search or retry in a few minutes."
+        )
+    except httpx.HTTPStatusError as e:
+        return (
+            f"API error: King County GIS returned HTTP {e.response.status_code}. "
+            f"The King County GIS may be experiencing issues."
+        )
     except Exception as e:
-        return f"Error finding nearby parcels: {str(e)}"
+        return f"Unexpected error finding nearby parcels: {str(e)}"
 
 
 # =============================================================================
@@ -717,4 +868,5 @@ async def get_development_comparables(address: str, days_back: int = 365) -> str
 # =============================================================================
 
 if __name__ == "__main__":
+    _debug(f"Socrata app token: {'configured' if SOCRATA_APP_TOKEN else 'not set (throttled)'}")
     mcp.run()

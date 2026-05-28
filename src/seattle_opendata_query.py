@@ -237,7 +237,7 @@ def generate_summary(dataframes):
         f.write("=" * 60 + "\n")
         f.write("SEATTLE OPEN DATA QUERY SUMMARY\n")
         f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-        f.write(f"Project: 2412 S Dearborn St\n")
+        f.write("Project: 2412 S Dearborn St\n")
         f.write("=" * 60 + "\n\n")
         
         for name, df in dataframes.items():

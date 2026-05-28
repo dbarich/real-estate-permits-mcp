@@ -56,6 +56,36 @@ Restart Claude Desktop. The 8 tools will appear in your tool list.
 
 No API keys required — both data sources are free and public.
 
+### Optional: Socrata app token
+
+The server works without an app token but may be rate-limited during heavy use
+(e.g. running the `dearborn-market-pull` skill, which fires 15+ queries in
+sequence). To get a free token:
+
+1. Create an account at https://data.seattle.gov
+2. Go to **Profile → Developer Settings** and create a new app token
+3. Set the environment variable:
+
+   ```bash
+   export SOCRATA_APP_TOKEN=your_token_here
+   ```
+
+   Or add it to the Claude Desktop config:
+
+   ```json
+   {
+     "mcpServers": {
+       "real-estate-permits": {
+         "command": "python",
+         "args": ["/path/to/real-estate-permits-mcp/src/seattle_permits_server.py"],
+         "env": {
+           "SOCRATA_APP_TOKEN": "your_token_here"
+         }
+       }
+     }
+   }
+   ```
+
 ## Available tools
 
 | Tool | What it does |

@@ -34,6 +34,10 @@ product-manager/
 product-manager-workspace/
 product-manager-eval-review.html
 planning-visual/
+claude-code-prompts/
+.git-broken/
+.claude/
+tests/integration_results.json
 
 # Data cache (future)
 data/*.json
