@@ -2,9 +2,9 @@
 
 ## Current Position
 
-**Stage: Prototype → Hardening (Fork A selected May 24, 2026)**
+**Stage: Hardening (Fork A) — Phase 1 technical work complete, awaiting tester feedback (May 31, 2026)**
 
-The MCP server runs, serves real data, and has been used to produce actual bank underwriting documents. Repo is live on GitHub (github.com/dbarich/real-estate-permits-mcp), tagged v0.1.0-alpha. Two testers recruited: an engineer reviewing code, and a Zillow data scientist (Bryson) reviewing use case/usability. Devin is shifting primary focus to the FIDIC Tool project; this project is on a minimal-effort path to a testable skeleton.
+The MCP server runs, serves real data, and has been used to produce actual bank underwriting documents. Repo is live on GitHub (github.com/dbarich/real-estate-permits-mcp), tagged **v0.2.0-alpha** (May 28, 2026). All eight tools are hardened with input validation, SoQL sanitization, and three-tier error differentiation; integration tests pass 14/14. The only remaining Phase 1 item is the human gate: both testers running 3 use cases without author assistance. Two testers recruited: an engineer reviewing code (URL shared), and a Zillow data scientist (Bryson) reviewing use case/usability (onboarding package ready, no date scheduled). Devin is shifting primary focus to the FIDIC Tool project; this project is now in validation mode pending tester signal.
 
 **Development Fork:** Fork A — MCP Hardening (stay in Claude Desktop, no new UI). Fix bugs, add validation, let testers use it as-is. Tests the hypothesis that the Claude natural language interface is the product, not just a wrapper.
 
@@ -14,7 +14,7 @@ The MCP server runs, serves real data, and has been used to produce actual bank 
 
 ---
 
-## Phase 1: Prototype Hardening (Active — target: June 7, 2026)
+## Phase 1: Prototype Hardening (Technical work complete — gate open, target: June 7, 2026)
 
 **Goal:** Make the existing tool reliable and testable enough to hand to someone else. Minimal effort — fix what's broken, validate with 2 testers, learn.
 
@@ -23,19 +23,22 @@ The MCP server runs, serves real data, and has been used to produce actual bank 
 - [x] README with setup instructions clear enough for a non-author to follow
 - [x] Published to GitHub as public repository
 - [x] Demo script with real query sequences for advisor conversation
-- [x] Fix parcel address lookup bug — Layer 2 (Parcels) as primary, address-format permutations, debug logging (May 24, 2026)
-- [x] Input validation on parcel-lookup tools (empty/malformed address handling) — partial; rest of tools pending
-- [ ] Error type differentiation (no results vs. API error vs. timeout)
-- [x] Basic smoke tests for parcel lookup (tests/test_parcel_lookup.py covers 3 target addresses + validation)
-- [ ] Socrata app token support (environment variable, optional)
+- [x] Fix parcel address lookup bug — Layer 2 (Parcels) as primary, address-format permutations, debug logging (v0.1.1-alpha, May 24, 2026)
+- [x] Input validation on **all 8 tools** — ZIP/PIN/permit regex, street-name minimums, days_back/limit bounds clamping (v0.2.0-alpha, May 28, 2026)
+- [x] Error type differentiation across all tools (no results vs. API error vs. timeout) with actionable messages (v0.2.0-alpha)
+- [x] SoQL sanitization — `_sanitize_soql()` escapes user input before WHERE-clause interpolation (v0.2.0-alpha)
+- [x] Socrata app token support (optional `SOCRATA_APP_TOKEN` env var, prevents rate limiting) (v0.2.0-alpha)
+- [x] NoneType null-field bug fix in `get_parcel_by_pin` (`(value or 'N/A')` pattern) (v0.2.0-alpha)
+- [x] Smoke tests for parcel lookup (tests/test_parcel_lookup.py — 3 addresses, PIN, 10 validation cases, no-results path, sanitization)
+- [x] Integration test across 2 properties + validation probes (tests/integration_test.py) — 14/14 passing
+- [x] Quick-start onboarding — `setup.sh` auto-installer + `QUICKSTART.md` with evaluation questions
+- [ ] **Gate (open): Both testers install, configure, and successfully run 3 use cases without author assistance**
 
 **Deferred from original plan (revisit post-feedback):**
 - Structured JSON output mode — only build if testers request it
-- Comprehensive test suite — smoke tests are sufficient for alpha
+- Comprehensive test suite — smoke + integration tests are sufficient for alpha
 
-**Gate:** Both testers can install, configure, and successfully run 3 use cases without author assistance.
-
-**Risk:** Dependency on FastMCP stability — if the MCP SDK changes, the server needs updating.
+**Risk:** Dependency on FastMCP stability — if the MCP SDK changes, the server needs updating. Validation risk now dominant: progress is gated entirely on two human testers responding.
 
 ---
 
@@ -83,7 +86,7 @@ The MCP server runs, serves real data, and has been used to produce actual bank 
 - [ ] MCP server registry listing (if Anthropic establishes one)
 - [ ] Landing page or README that serves as product documentation
 - [ ] License chosen and applied (likely MIT or Apache 2.0 for open-source)
-- [ ] Changelog and versioning (semver)
+- [x] Changelog and versioning (semver) — CHANGELOG.md added, version synced across pyproject + server (`__version__`)
 
 **Gate:** Someone you've never met can find, install, and use the tool based solely on public documentation.
 
@@ -133,21 +136,25 @@ The MCP server runs, serves real data, and has been used to produce actual bank 
 
 ---
 
-## Timeline (Updated May 24, 2026)
+## Timeline (Updated May 31, 2026)
 
 ```
-May 2026                    Jun 2026                    Jul 2026
-    │                           │                           │
-    ├─ v0.1.0-alpha (DONE) ─┐   │                           │
-    │  GitHub live, 2 testers│   │                           │
-    │                       ├── Hardening (Fork A) ──┐      │
-    │                           │  Bug fix, validation│      │
-    │                           │  Target: Jun 7      │      │
-    │                           │                     ├── Beta
-    │                           │                     │  Target: late Jun
-    │                           │                     │
-    │                           │                     │  V1 / Expansion: TBD
-    │                           │                     │  based on feedback
+May 2026                        Jun 2026                    Jul 2026
+    │                               │                           │
+    ├─ v0.1.0-alpha (DONE) ─┐       │                           │
+    ├─ v0.1.1-alpha (DONE) ─┤       │                           │
+    │  parcel lookup fix     │       │                           │
+    ├─ v0.2.0-alpha (DONE) ──┤       │                           │
+    │  validation, sanitize, │       │                           │
+    │  errors, tests 14/14   │       │                           │
+    │                        └── Hardening gate ──┐             │
+    │                            (awaiting tester  │             │
+    │                             feedback)        │             │
+    │                            Target: Jun 7     ├── Beta      │
+    │                                              │  Target: late Jun
+    │                                              │             │
+    │                                              │  V1 / Expansion: TBD
+    │                                              │  based on feedback
 ```
 
-These timelines assume LOW effort — Devin's primary focus is on the FIDIC Tool project. This project is in maintenance/validation mode: fix what's broken, collect feedback, decide whether to invest further based on tester signal.
+All v0.2.0-alpha technical hardening is complete. The Phase 1 gate is now the bottleneck — it depends entirely on two human testers, not further engineering. These timelines assume LOW effort: Devin's primary focus is the FIDIC Tool project. This project is in validation mode — collect tester signal, then decide whether to invest further.

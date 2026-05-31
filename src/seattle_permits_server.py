@@ -22,6 +22,10 @@ import re
 import sys
 from datetime import datetime, timedelta
 
+# Package version. Keep in sync with the `version` field in pyproject.toml
+# and the latest entry in CHANGELOG.md when cutting a release.
+__version__ = "0.2.1-alpha"
+
 # Initialize MCP server
 mcp = FastMCP("seattle-permits")
 

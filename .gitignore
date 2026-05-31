@@ -37,6 +37,7 @@ planning-visual/
 claude-code-prompts/
 .git-broken/
 .claude/
+skills/surgical-build/
 tests/integration_results.json
 
 # Data cache (future)
