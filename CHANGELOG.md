@@ -11,6 +11,34 @@ change between minor versions without deprecation.
 
 - Phase 1 gate pending: both testers install, configure, and run 3 use cases
   without author assistance.
+- Deferred (pending live tester call): user-flow guides / worked examples.
+
+### Docs
+- Corrected an accuracy overclaim in `README.md` (and the local, gitignored
+  `NARRATIVE-OVERVIEW.md`): the tool has **not** been validated by any bank or
+  lender. Reframed as one developer's best-attempt prototype of a lender-facing
+  underwriting-support tool, informally peer-reviewed (a data scientist and an
+  industry peer) and seeking real lender feedback. No code or tool behavior
+  changed. Left under Unreleased rather than cutting a version, since a `__version__`
+  bump would require a `src/` edit this docs-only change is scoped to avoid.
+
+## [0.2.2-alpha] — 2026-06-02
+
+First external-tester fixes. An engineer installed cross-platform (Mac→PC) and
+hit a rate-limit stall running a skill without a Socrata app token; the error
+message blamed the portal instead of pointing at the fix.
+
+### Added
+- Dedicated HTTP 429 (rate-limit) error branch via a shared `_http_error()`
+  helper: explains the throttling and, for Seattle/Socrata, gives the exact
+  token fix and signup link.
+- "Before running skills" token-prerequisite section in QUICKSTART.md.
+- Soft pre-flight token check/warning in the `dearborn-market-pull` skill.
+
+### Changed
+- Collapsed 7 duplicated `HTTPStatusError` blocks across the tools into the
+  single `_http_error()` formatter (no behavior change beyond the new 429 path).
+- README reframes the app token from "optional" to required-in-practice for skills.
 
 ## [0.2.1-alpha] — 2026-05-31
 
@@ -75,7 +103,8 @@ Initial public alpha.
 - Public GitHub repository under the MIT license, with README, CONTRIBUTING,
   and full PM documentation (`docs/00-07/`).
 
-[Unreleased]: https://github.com/dbarich/real-estate-permits-mcp/compare/v0.2.1-alpha...HEAD
+[Unreleased]: https://github.com/dbarich/real-estate-permits-mcp/compare/v0.2.2-alpha...HEAD
+[0.2.2-alpha]: https://github.com/dbarich/real-estate-permits-mcp/compare/v0.2.1-alpha...v0.2.2-alpha
 [0.2.1-alpha]: https://github.com/dbarich/real-estate-permits-mcp/compare/v0.2.0-alpha...v0.2.1-alpha
 [0.2.0-alpha]: https://github.com/dbarich/real-estate-permits-mcp/compare/v0.1.1-alpha...v0.2.0-alpha
 [0.1.1-alpha]: https://github.com/dbarich/real-estate-permits-mcp/compare/v0.1.0-alpha...v0.1.1-alpha

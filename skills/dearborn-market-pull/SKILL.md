@@ -21,6 +21,24 @@ Pull current permit activity and property comparable sales data from the Judkins
 - Proposed: 4-level stacked dwelling units (daylight basement + 3 above-grade)
 - SDCI confirmation: Stacked units approved, 36 ft height envelope (SMC 23.45.514.F)
 
+## Prerequisite: Socrata app token (strongly recommended)
+
+This skill fires 15+ data queries in a short burst. Seattle's Open Data API
+throttles **unauthenticated** requests (shared per-IP pool), so a tokenless run
+will usually get rate-limited (HTTP 429) and stall partway through.
+
+Before running, check whether `SOCRATA_APP_TOKEN` is set in the MCP server's
+environment. If it is **not** set, warn the user:
+
+> Heads up — this report runs 15+ queries and Seattle throttles unauthenticated
+> traffic, so it will likely stall without an app token. Get a free token at
+> https://data.seattle.gov/profile/app_tokens, add it to your Claude Desktop MCP
+> config under `env` as `SOCRATA_APP_TOKEN`, and restart Claude Desktop.
+
+This is a soft warning, not a hard stop: if the user wants to proceed anyway,
+continue — single broad queries may still succeed, and any 429 will now return
+an actionable message explaining the token fix.
+
 ## Steps
 
 ### Step 1: Pull Permit Data

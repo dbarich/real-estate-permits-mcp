@@ -2,7 +2,7 @@
 
 > An MCP server that gives Claude access to Seattle building permits and King County property data. Ask questions in plain English, get structured answers from public records.
 
-**Status: alpha** — Working prototype, single-user validated. Built for a real construction loan application. Looking for early feedback from developers and real estate professionals in the Seattle market.
+**Status: alpha** — Working prototype, single-user (builder side). This is one developer's best attempt at the market-context and underwriting package a construction lender would want to evaluate. It has **not** been validated by any bank or lender; to date it has been reviewed informally by a data scientist and an industry peer. Seeking feedback from developers, lenders, and real estate professionals in the Seattle market.
 
 ## What it does
 
@@ -18,7 +18,7 @@ The server figures out which APIs to query, pulls the data, and returns structur
 
 ## Who it's for
 
-Small-scale real estate developers building 2-8 unit projects who need market context for loan applications, feasibility studies, and investor pitches. The tool was built by one — and validated against a real bank underwriting process.
+Small-scale real estate developers building 2-8 unit projects who need market context for loan applications, feasibility studies, and investor pitches. The tool was built by one developer and is designed to model what a construction-loan underwriting review calls for. It has not yet been evaluated by a bank or lender — that feedback is exactly what we're looking for.
 
 There's also a hypothesis (unvalidated) that lenders could use the same tool to independently verify market claims in construction loan applications. If you're on that side of the table, we'd especially like to hear from you.
 
@@ -56,11 +56,13 @@ Restart Claude Desktop. The 8 tools will appear in your tool list.
 
 No API keys required — both data sources are free and public.
 
-### Optional: Socrata app token
+### Socrata app token (optional for single queries, required in practice for skills)
 
-The server works without an app token but may be rate-limited during heavy use
-(e.g. running the `dearborn-market-pull` skill, which fires 15+ queries in
-sequence). To get a free token:
+Individual questions work without an app token. But the bundled **skills** —
+e.g. `dearborn-market-pull`, which fires 15+ queries in a burst — will be
+throttled by Seattle's API without one (HTTP 429), causing the run to stall
+partway through. If you plan to run skills, treat the token as a prerequisite.
+To get a free token:
 
 1. Create an account at https://data.seattle.gov
 2. Go to **Profile → Developer Settings** and create a new app token
@@ -104,7 +106,7 @@ sequence). To get a free token:
 The `skills/` directory includes two Claude skills that demonstrate how to build workflows on top of the MCP server:
 
 - **dearborn-mcp** — Interactive research skill for ad-hoc corridor queries (ZIP codes 98144/98122)
-- **dearborn-market-pull** — Automated bi-weekly market report that generates formatted Word documents for bank submission
+- **dearborn-market-pull** — Automated bi-weekly market report that generates formatted Word documents for a construction-loan package
 
 These are real skills used in production for a Judkins Park construction project. Fork and adapt them for your own target area.
 

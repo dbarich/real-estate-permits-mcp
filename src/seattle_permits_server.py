@@ -24,7 +24,7 @@ from datetime import datetime, timedelta
 
 # Package version. Keep in sync with the `version` field in pyproject.toml
 # and the latest entry in CHANGELOG.md when cutting a release.
-__version__ = "0.2.1-alpha"
+__version__ = "0.2.2-alpha"
 
 # Initialize MCP server
 mcp = FastMCP("seattle-permits")
@@ -79,6 +79,33 @@ KC_PROPERTY_INFO = "https://gismaps.kingcounty.gov/arcgis/rest/services/Property
 # =============================================================================
 # SEATTLE PERMIT QUERIES (Existing)
 # =============================================================================
+
+def _http_error(status_code: int, source: str) -> str:
+    """Format an HTTP error returned by an upstream API.
+
+    A 429 is user-fixable (rate limiting), not an outage — so it gets its own
+    actionable message. For Seattle/Socrata the fix is a free app token; the
+    most common trigger is a multi-query skill run without one.
+    """
+    if status_code == 429:
+        msg = (
+            f"Rate limited (HTTP 429): {source} is throttling requests because too "
+            f"many arrived in a short window. This is the usual cause when a "
+            f"multi-query skill stalls partway through."
+        )
+        if "Seattle" in source:
+            msg += (
+                " Unauthenticated requests share a throttled pool. Set a free "
+                "SOCRATA_APP_TOKEN to raise the limit: get one at "
+                "https://data.seattle.gov/profile/app_tokens, add it to your MCP "
+                "server config under env (SOCRATA_APP_TOKEN), and restart Claude Desktop."
+            )
+        return msg
+    return (
+        f"API error: {source} returned HTTP {status_code}. "
+        f"{source} may be experiencing issues."
+    )
+
 
 async def query_socrata(dataset_id: str, where_clause: str = "", limit: int = 50) -> list:
     """Query Seattle's Socrata API."""
@@ -150,10 +177,7 @@ async def search_permits(street_name: str, days_back: int = 365) -> str:
             "Try narrowing your search or retry in a few minutes."
         )
     except httpx.HTTPStatusError as e:
-        return (
-            f"API error: Seattle data portal returned HTTP {e.response.status_code}. "
-            f"The Seattle data portal may be experiencing issues."
-        )
+        return _http_error(e.response.status_code, "Seattle data portal")
     except Exception as e:
         return f"Unexpected error querying permits: {str(e)}"
 
@@ -212,10 +236,7 @@ async def search_permits_by_zip(zip_code: str, permit_type: str = "", days_back:
             "Try narrowing your search or retry in a few minutes."
         )
     except httpx.HTTPStatusError as e:
-        return (
-            f"API error: Seattle data portal returned HTTP {e.response.status_code}. "
-            f"The Seattle data portal may be experiencing issues."
-        )
+        return _http_error(e.response.status_code, "Seattle data portal")
     except Exception as e:
         return f"Unexpected error querying permits: {str(e)}"
 
@@ -276,10 +297,7 @@ async def get_multifamily_permits(days_back: int = 365, limit: int = 50) -> str:
             "Try narrowing your search or retry in a few minutes."
         )
     except httpx.HTTPStatusError as e:
-        return (
-            f"API error: Seattle data portal returned HTTP {e.response.status_code}. "
-            f"The Seattle data portal may be experiencing issues."
-        )
+        return _http_error(e.response.status_code, "Seattle data portal")
     except Exception as e:
         return f"Unexpected error fetching multifamily permits: {str(e)}"
 
@@ -338,10 +356,7 @@ async def get_permit_details(permit_number: str) -> str:
             "Try narrowing your search or retry in a few minutes."
         )
     except httpx.HTTPStatusError as e:
-        return (
-            f"API error: Seattle data portal returned HTTP {e.response.status_code}. "
-            f"The Seattle data portal may be experiencing issues."
-        )
+        return _http_error(e.response.status_code, "Seattle data portal")
     except Exception as e:
         return f"Unexpected error fetching permit: {str(e)}"
 
@@ -595,10 +610,7 @@ async def get_parcel_by_address(address: str) -> str:
             "Try narrowing your search or retry in a few minutes."
         )
     except httpx.HTTPStatusError as e:
-        return (
-            f"API error: King County GIS returned HTTP {e.response.status_code}. "
-            f"The King County GIS may be experiencing issues."
-        )
+        return _http_error(e.response.status_code, "King County GIS")
     except Exception as e:
         return f"Unexpected error querying King County parcel data: {str(e)}"
 
@@ -731,10 +743,7 @@ async def get_parcel_by_pin(pin: str) -> str:
             "Try narrowing your search or retry in a few minutes."
         )
     except httpx.HTTPStatusError as e:
-        return (
-            f"API error: King County GIS returned HTTP {e.response.status_code}. "
-            f"The King County GIS may be experiencing issues."
-        )
+        return _http_error(e.response.status_code, "King County GIS")
     except Exception as e:
         return f"Unexpected error querying parcel by PIN: {str(e)}"
 
@@ -814,10 +823,7 @@ async def get_nearby_parcels(address: str, property_type: str = "") -> str:
             "Try narrowing your search or retry in a few minutes."
         )
     except httpx.HTTPStatusError as e:
-        return (
-            f"API error: King County GIS returned HTTP {e.response.status_code}. "
-            f"The King County GIS may be experiencing issues."
-        )
+        return _http_error(e.response.status_code, "King County GIS")
     except Exception as e:
         return f"Unexpected error finding nearby parcels: {str(e)}"
 

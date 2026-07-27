@@ -16,6 +16,23 @@ The script installs dependencies, verifies the APIs are reachable, and configure
 
 **Verify it works:** Open Claude Desktop and type: *"Search for building permits on Dearborn Street in the last 6 months."* You should see structured permit results with addresses, types, costs, and dates.
 
+### Before running skills: get a free Socrata app token
+
+Single questions work without any token. But the bundled **skills** (e.g. the
+Dearborn market pull) fire 15+ queries in a burst, and Seattle throttles
+unauthenticated traffic — so a tokenless skill run will usually get rate-limited
+(HTTP 429) and stall partway through. Treat the token as a prerequisite for
+skills:
+
+1. Go to https://data.seattle.gov/profile/app_tokens (free, ~2 minutes)
+2. Create an app token
+3. Add it to your Claude Desktop config under the server's `env` block as
+   `SOCRATA_APP_TOKEN`, then restart Claude Desktop (see README for the exact
+   config snippet)
+
+If you skip this and a skill stalls, that's almost always the cause — the tool
+will now tell you so explicitly.
+
 ## What You Can Do
 
 The tool exposes 8 capabilities to Claude. You don't need to know the tool names — just ask questions naturally. Here are some starting points:
@@ -52,7 +69,7 @@ Neither source requires an API key. Both are free, public, and updated regularly
 - **Seattle only.** Permit data is Seattle SDCI permits. Parcel data covers King County but the tool is optimized for Seattle addresses.
 - **Address matching is imperfect.** The tool tries multiple address format variants (directionals, suffixes) but some addresses may not match on the first try. If an address lookup fails, try the PIN instead.
 - **Sales data is ~3 years.** King County's sales layer only includes recent transactions. Properties that haven't sold recently will show "no sale in past ~3 years."
-- **No caching.** Every query hits the live API. During heavy use, you may occasionally see rate limiting (add a Socrata app token to avoid this — see README).
+- **No caching.** Every query hits the live API. Single queries are fine tokenless, but multi-query skills will be rate-limited without a Socrata app token — see "Before running skills" above.
 
 ## Evaluation Questions
 
