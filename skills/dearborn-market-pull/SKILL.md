@@ -62,10 +62,10 @@ Run these MCP tool calls for property sales data:
 
 ### Step 3: Diff Against Previous Snapshot
 
-Before generating the report, check for previous snapshots in the workspace:
+Before generating the report, check for previous snapshots in the Bookstorhaus workspace:
 
 ```
-market_snapshots/*.json
+~/Bookstorhaus/market_snapshots/*.json
 ```
 
 If a previous snapshot exists, load the most recent one and compare against the current pull. Identify:
@@ -78,7 +78,7 @@ If a previous snapshot exists, load the most recent one and compare against the 
 
 Save the current data as a new snapshot:
 ```
-market_snapshots/YYYY-MM-DD.json
+~/Bookstorhaus/market_snapshots/YYYY-MM-DD.json
 ```
 
 Use the same JSON schema as the baseline snapshot (see existing files in that directory for the format). This creates a growing timeline of market data that the bank can review.
@@ -114,8 +114,8 @@ Formatting requirements:
 - Header: "Bookstorhaus Development | Market Analysis" with date
 - Footer: "Confidential | Prepared for US Bank Underwriting Review" with page numbers
 
-Save the file to the workspace folder with a dated filename:
-`Bookstorhaus_Market_Analysis_YYYY-MM-DD.docx`
+Save the file to the Bookstorhaus workspace with a dated filename:
+`~/Bookstorhaus/Bookstorhaus_Market_Analysis_YYYY-MM-DD.docx`
 
 Validate the document using:
 ```bash
