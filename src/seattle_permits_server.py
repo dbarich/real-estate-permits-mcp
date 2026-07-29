@@ -24,7 +24,7 @@ from datetime import datetime, timedelta
 
 # Package version. Keep in sync with the `version` field in pyproject.toml
 # and the latest entry in CHANGELOG.md when cutting a release.
-__version__ = "0.2.2-alpha"
+__version__ = "0.2.3-alpha"
 
 # Initialize MCP server
 mcp = FastMCP("seattle-permits")
@@ -202,7 +202,7 @@ async def search_permits_by_zip(zip_code: str, permit_type: str = "", days_back:
 
     cutoff = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
     safe_zip = _sanitize_soql(zip_code)
-    where = f"zip like '{safe_zip}%' AND issueddate > '{cutoff}'"
+    where = f"originalzip like '{safe_zip}%' AND issueddate > '{cutoff}'"
 
     if permit_type:
         safe_type = _sanitize_soql(permit_type.strip().upper())

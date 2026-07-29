@@ -1,6 +1,6 @@
 [project]
 name = "real-estate-permits-mcp"
-version = "0.2.2-alpha"
+version = "0.2.3-alpha"
 description = "MCP server for Seattle building permits and King County property data"
 readme = "README.md"
 license = {text = "MIT"}

@@ -13,20 +13,27 @@ change between minor versions without deprecation.
   without author assistance.
 - Deferred (pending live tester call): user-flow guides / worked examples.
 
-### Docs
-- Corrected an accuracy overclaim in `README.md` (and the local, gitignored
-  `NARRATIVE-OVERVIEW.md`): the tool has **not** been validated by any bank or
-  lender. Reframed as one developer's best-attempt prototype of a lender-facing
-  underwriting-support tool, informally peer-reviewed (a data scientist and an
-  industry peer) and seeking real lender feedback. No code or tool behavior
-  changed. Left under Unreleased rather than cutting a version, since a `__version__`
-  bump would require a `src/` edit this docs-only change is scoped to avoid.
+## [0.2.3-alpha] — 2026-07-27
+
+### Fixed
+- `search_permits_by_zip` returned HTTP 400 on every call: the SoQL WHERE clause
+  queried field `zip`, but the Socrata dataset's field is `originalzip`
+  (verified against a live record). Found during a full-suite end-to-end demo
+  run; one-line fix.
 
 ## [0.2.2-alpha] — 2026-06-02
 
 First external-tester fixes. An engineer installed cross-platform (Mac→PC) and
 hit a rate-limit stall running a skill without a Socrata app token; the error
 message blamed the portal instead of pointing at the fix.
+
+### Docs
+- Corrected an accuracy overclaim in `README.md` (and the local, gitignored
+  `NARRATIVE-OVERVIEW.md`): the tool has **not** been validated by any bank or
+  lender. Reframed as one developer's best-attempt prototype of a lender-facing
+  underwriting-support tool, informally peer-reviewed (a data scientist and an
+  industry peer) and seeking real lender feedback. No code or tool behavior
+  changed. (Shipped in the v0.2.2-alpha commit alongside the fixes below.)
 
 ### Added
 - Dedicated HTTP 429 (rate-limit) error branch via a shared `_http_error()`
