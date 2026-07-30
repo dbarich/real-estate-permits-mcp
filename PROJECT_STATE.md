@@ -1,7 +1,14 @@
 # PROJECT_STATE — Real Estate Permits MCP
-Updated: 2026-07-27 · By: Cowork session
+Updated: 2026-07-27 (evening) · By: Cowork session
 
 ## Shipped
+- v0.2.3-alpha (pushed, tagged): fixed search_permits_by_zip — queried field
+  `zip` but dataset field is `originalzip`; tool had never worked. Found during
+  the full-suite end-to-end demo run; verified post-restart (100 results in 98144,
+  incl. NEW find: $507K permit at 2439 S Judkins, Jun 2026 — neighborhood evidence)
+- Vontive call prep complete: Vijaykumar_Vontive_Call_Prep.html + Vontive Demo/
+  folder (END_TO_END_QUERY_PROCESS.md + RAW_QUERY_TRANSCRIPT.md) in ~/Job Hunt.
+  Demo strategy decided: show edges (no-match UX, bug-find story), not just polish
 - v0.2.2-alpha (pushed, tagged): Socrata 429 rate-limit handling with actionable
   token guidance; token reframed as prerequisite for skills; bank-validation
   overclaim corrected in README (proactive-disclosure note in commit body)
