@@ -4,13 +4,13 @@
 
 **Stage: Hardening (Fork A) — Phase 1 technical work complete, awaiting tester feedback (May 31, 2026)**
 
-The MCP server runs, serves real data, and has been used to produce actual bank underwriting documents. Repo is live on GitHub (github.com/dbarich/real-estate-permits-mcp), tagged **v0.2.0-alpha** (May 28, 2026). All eight tools are hardened with input validation, SoQL sanitization, and three-tier error differentiation; integration tests pass 14/14. The only remaining Phase 1 item is the human gate: both testers running 3 use cases without author assistance. Two testers recruited: an engineer reviewing code (URL shared), and a Zillow data scientist (Bryson) reviewing use case/usability (onboarding package ready, no date scheduled). Devin is shifting primary focus to the FIDIC Tool project; this project is now in validation mode pending tester signal.
+The MCP server runs, serves real data, and has been used to produce actual bank underwriting documents. Repo is live on GitHub (github.com/dbarich/real-estate-permits-mcp), tagged **v0.2.0-alpha** (May 28, 2026). All eight tools are hardened with input validation, SoQL sanitization, and three-tier error differentiation; integration tests pass 14/14. The only remaining Phase 1 item is the human gate: both testers running 3 use cases without author assistance. Two testers recruited: an engineer reviewing code (URL shared), and a data scientist at a major real-estate platform reviewing use case/usability (onboarding package ready, no date scheduled). Devin is shifting primary focus to the FIDIC Tool project; this project is now in validation mode pending tester signal.
 
 **Development Fork:** Fork A — MCP Hardening (stay in Claude Desktop, no new UI). Fix bugs, add validation, let testers use it as-is. Tests the hypothesis that the Claude natural language interface is the product, not just a wrapper.
 
 **Alternatives considered and deferred:**
 - Fork B (Streamlit thin client): Revisit if feedback indicates non-technical users need a GUI
-- Fork C (Static showcase + recorded demos): May layer on after Bryson demo is recorded
+- Fork C (Static showcase + recorded demos): May layer on after the advisor demo is recorded
 
 ---
 
@@ -61,7 +61,7 @@ The MCP server runs, serves real data, and has been used to produce actual bank 
 
 **User Recruitment Strategy:**
 - Engineer tester (recruited, reviewing code)
-- Bryson / Zillow data scientist (recruited, reviewing use case)
+- Data scientist at a major real-estate platform (recruited, reviewing use case)
 - Post in Anthropic MCP community (Discord, GitHub discussions)
 - 1-2 additional Seattle real estate developers if initial feedback is positive
 
